@@ -331,22 +331,23 @@ def display_dashboard(responses, session_info=None):
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("📄 Download JSON Report", use_container_width=True):
-            import json
-            report = {
-                'user': username,
-                'session_id': st.session_state.get('session_id'),
-                'completed_assessments': len(responses),
-                'average_rating': avg_rating,
-                'strongest_archetype': highest_character['character_name'],
-                'assessments': responses
-            }
-            st.download_button(
-                label="💾 Download",
-                data=json.dumps(report, indent=2),
-                file_name=f"mahabharata_assessment_{st.session_state.get('session_id', 'report')}.json",
-                mime="application/json"
-            )
+        import json
+        report = {
+            'user': username,
+            'session_id': st.session_state.get('session_id'),
+            'completed_assessments': len(responses),
+            'average_rating': avg_rating,
+            'strongest_archetype': highest_character['character_name'],
+            'assessments': responses
+        }
+        
+        st.download_button(
+            label="📄 Download JSON Report",
+            data=json.dumps(report, indent=2),
+            file_name=f"mahabharata_assessment_{st.session_state.get('session_id', 'report')}.json",
+            mime="application/json",
+            use_container_width=True
+        )
     
     with col2:
         if st.button("🏠 Start New Assessment", use_container_width=True):
