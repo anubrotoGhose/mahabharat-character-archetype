@@ -267,8 +267,8 @@ def display_dashboard(responses, session_info=None):
     # Individual character analysis
     st.write("---")
     st.write("## 🎭 Individual Character Deep Dive")
-    
-    for response in responses:
+
+    for idx, response in enumerate(responses):
         with st.expander(f"**{response['character_name']}** - Rating: {response['analysis']['overall_rating']:.1f}/10", expanded=False):
             
             # Overall rating gauge
@@ -276,7 +276,8 @@ def display_dashboard(responses, session_info=None):
             
             with col1:
                 fig = create_progress_gauge(response['analysis']['overall_rating'])
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, 
+                            key=f"char_gauge_{response['character_id']}_{idx}_{response.get('created_at', '')}")
             
             with col2:
                 st.write(f"### Assessment Summary")
@@ -311,7 +312,8 @@ def display_dashboard(responses, session_info=None):
             if response['analysis'].get('quality_ratings'):
                 st.write("### 📊 Quality Ratings Breakdown")
                 fig = create_radar_chart(response['analysis']['quality_ratings'], response['character_name'])
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, 
+                            key=f"char_radar_{response['character_id']}_{idx}_{response.get('created_at', '')}")
             
             # Detailed analysis
             with st.expander("📝 Detailed Analysis & Insights"):
@@ -320,6 +322,7 @@ def display_dashboard(responses, session_info=None):
             # User responses
             with st.expander("📋 Your Responses"):
                 st.json(response['responses'])
+
     
     # Download report
     st.write("---")
@@ -352,7 +355,6 @@ def display_dashboard(responses, session_info=None):
 def main():
     # Sidebar navigation
     with st.sidebar:
-        st.image("https://img.icons8.com/color/96/000000/hindu.png", width=100)
         st.title("🎭 Dashboard")
         
         st.write("---")
@@ -363,7 +365,7 @@ def main():
         
         view_mode = st.radio(
             "View Mode:",
-            ["Current Session", "Past Sessions", "Search by Username"],
+            ["Current Session", "Past Sessions"],
             help="Switch between current session, history, or search other users"
         )
         
