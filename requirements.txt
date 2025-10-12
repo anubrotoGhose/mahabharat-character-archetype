@@ -1,0 +1,8 @@
+streamlit
+langchain-google-genai
+plotly
+pandas
+python-dotenv
+supabase
+SQLAlchemy
+aiosqlite
