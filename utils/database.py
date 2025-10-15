@@ -195,6 +195,19 @@ class Database:
         except Exception as e:
             print(f"Error creating session: {e}")
             return None
+        
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a session and all its associated data"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                # Foreign key constraints will handle cascading deletes
+                cursor.execute("DELETE FROM p1_mb_sessions WHERE id = %s", (session_id,))
+                return True
+        except Exception as e:
+            print(f"Error deleting session: {e}")
+            return False
+
     
     def save_character_response(self, session_id: str, character_id: int, 
                                 character_name: str, read_passage: bool,

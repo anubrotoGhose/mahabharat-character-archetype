@@ -1,7 +1,9 @@
+# pages/dashboard.py
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 from utils.database import Database
+from datetime import datetime   
 from utils.visualization import (
     create_radar_chart, 
     create_bar_chart, 
@@ -17,6 +19,12 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
+
+def datetime_handler(obj):
+    """JSON serializer for datetime objects"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 # Function to encode image to base64
 def get_base64_image(image_path):
@@ -140,7 +148,7 @@ def display_session_list(username):
     
     for idx, session in enumerate(sessions):
         with st.container():
-            col1, col2, col3 = st.columns([3, 2, 1])
+            col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
             
             with col1:
                 st.markdown(f"""
@@ -152,14 +160,29 @@ def display_session_list(username):
                 """, unsafe_allow_html=True)
             
             with col2:
-                st.write(f"**{session['completed']}** characters completed")
-                completion_pct = (session['completed'] / 3) * 100  # Assuming 3 total characters
+                total_chars = 6  # Total number of characters
+                st.write(f"**{session['completed']}/{total_chars}** characters completed")
+                completion_pct = (session['completed'] / total_chars) * 100
                 st.progress(min(completion_pct / 100, 1.0))
             
             with col3:
-                if st.button("👁️ View", key=f"view_{session['id']}", use_container_width=True):
-                    selected_session = session['id']
-                    st.session_state.selected_session = selected_session
+                if session['completed'] > 0:
+                    if st.button("👁️ View", key=f"view_{session['id']}", use_container_width=True):
+                        selected_session = session['id']
+                        st.session_state.selected_session = selected_session
+                else:
+                    st.button("👁️ View", key=f"view_{session['id']}", use_container_width=True, disabled=True)
+                    st.caption("No data")
+            
+            with col4:
+                # Delete button
+                if st.button("🗑️", key=f"delete_{session['id']}", use_container_width=True, help="Delete this session"):
+                    db = Database()
+                    if db.delete_session(session['id']):
+                        st.success("Session deleted!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to delete")
     
     return selected_session
 
@@ -167,7 +190,13 @@ def display_dashboard(responses, session_info=None):
     """Display complete dashboard for a session"""
     
     # Header with Krishna-Arjuna theme
-    username = st.session_state.get('username', 'User')
+    # Get username from session state or session_info
+    username = st.session_state.get('username')
+    if not username and session_info:
+        username = session_info.get('username', 'User')
+    if not username:
+        username = 'User'
+    
     st.markdown(f"""
     <div class="dashboard-header">
         <h1>🎭 Character Assessment Dashboard</h1>
@@ -343,7 +372,7 @@ def display_dashboard(responses, session_info=None):
         
         st.download_button(
             label="📄 Download JSON Report",
-            data=json.dumps(report, indent=2),
+            data=json.dumps(report, indent=2, default=datetime_handler),
             file_name=f"mahabharata_assessment_{st.session_state.get('session_id', 'report')}.json",
             mime="application/json",
             use_container_width=True

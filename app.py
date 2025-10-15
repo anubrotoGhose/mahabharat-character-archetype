@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import json
 from datetime import datetime
@@ -80,7 +81,7 @@ if 'initialized' not in st.session_state:
     st.session_state.current_question_idx = 0
     st.session_state.responses = []
     st.session_state.read_passage = False
-    st.session_state.stage = 'auth'  # auth, passage_choice, passage, questions, analysis
+    st.session_state.stage = 'auth'  # auth, welcome, passage_choice, passage, questions, analysis
     st.session_state.rating_responses = {}
     st.session_state.username = None
     st.session_state.characters = st.session_state.chatbot.characters_data
@@ -160,7 +161,6 @@ def show_auth():
 def show_login():
     """Show login form"""
     with st.container():
-        # st.markdown('<div class="auth-box">', unsafe_allow_html=True)
         st.write("### 🔐 Login to Your Account")
         
         with st.form("login_form"):
@@ -180,12 +180,7 @@ def show_login():
                         st.session_state.logged_in = True
                         st.session_state.username = user['username']
                         st.session_state.user_id = user['id']
-                        
-                        # Create new session
-                        st.session_state.session_id = str(uuid.uuid4())
-                        st.session_state.db.create_session(st.session_state.session_id, st.session_state.user_id)
-                        
-                        st.session_state.stage = 'passage_choice'
+                        st.session_state.stage = 'welcome'  # Changed from 'passage_choice'
                         st.session_state.initialized = True
                         st.success(f"✅ Welcome back, {username}!")
                         st.rerun()
@@ -231,6 +226,62 @@ def show_signup():
                             st.error("❌ Error creating account. Please try again.")
         
         st.markdown('</div>', unsafe_allow_html=True)
+        
+def show_welcome():
+    """Show welcome screen with preview and options"""
+    st.markdown(f"""
+    <div class="main-header">
+        <h1>Welcome, {st.session_state.username}! 🙏</h1>
+        <p style="color: white;">Your journey through the Mahabharata awaits</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.write("")
+    
+    # Preview text
+    st.markdown("""
+    <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin: 20px 0;">
+        <h3 style="color: #667eea; text-align: center;">📖 About This Assessment</h3>
+        <p style="text-align: justify; line-height: 1.8; font-size: 16px;">
+        Mahabharata, management and you, read by the author Amitrajit Ghosh, HR Professional and Executive Coach. 
+        Mahabharata is the ultimate Indian epic which has remarkably portrayed all human traits ranging from desire 
+        to sacrifice, jealousy to broad-minded, cruelty to compassion and short-sightedness to visionary. In order 
+        to help the audience clearly distinguish between each of these traits, a character has been assigned to depict 
+        a specific trait. And above all there is an ultimate supreme figure in the form of the great Krishna, who 
+        symbolizes a Sampoonapurush or the complete man.
+        </p>
+        <p style="text-align: justify; line-height: 1.8; font-size: 16px;">
+        The epic is over 5,000 years old, but even today in every walk of life we can see the story repeating itself 
+        with only characters changing. In order to succeed in India, global business corporations and its executives 
+        need to understand the history and culture of that nation. This book will give a deep insight into India's culture.
+        </p>
+        <p style="text-align: justify; line-height: 1.8; font-size: 16px;">
+        In the subsequent chapters, let's understand the characters of Arjuna, Duryodhana, Dronacharya, Karna, Draupadi 
+        and Krishna better and the learnings thereof, which in turn will help us in our career-building in organizations.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.write("")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🎯 Start New Assessment", use_container_width=True, type="primary"):
+            # Create new session
+            st.session_state.session_id = str(uuid.uuid4())
+            st.session_state.db.create_session(st.session_state.session_id, st.session_state.user_id)
+            st.session_state.current_character_idx = 0
+            st.session_state.current_question_idx = 0
+            st.session_state.responses = []
+            st.session_state.read_passage = False
+            st.session_state.stage = 'passage_choice'
+            st.rerun()
+    
+    with col2:
+        if st.button("📊 View Dashboard", use_container_width=True):
+            st.switch_page("pages/dashboard.py")
+
 
 def show_passage_choice():
     """Ask if user wants to read passage"""
@@ -343,6 +394,7 @@ def submit_responses():
         st.session_state.stage = 'analysis'
         st.rerun()
 
+
 def show_analysis():
     """Display analysis results"""
     current_char = st.session_state.characters[st.session_state.current_character_idx]
@@ -403,12 +455,19 @@ def main():
     # Sidebar
     with st.sidebar:
         st.image("assets/Mahabharat Krishna Wallpaper Teahub Io.jpg", width=100)
-        st.title("🎭 Character Assessment")
+        
+        # Changed: Show Home instead of title
+        if st.button("🏠 Home", use_container_width=True):
+            if st.session_state.logged_in:
+                st.session_state.stage = 'welcome'
+                st.rerun()
+        
+        st.write("---")
         
         if st.session_state.logged_in:
             st.success(f"👤 **{st.session_state.username}**")
             
-            if st.session_state.stage != 'auth':
+            if st.session_state.stage not in ['auth', 'welcome']:
                 st.write(f"📍 **Character:** {st.session_state.current_character_idx + 1}/{len(st.session_state.characters)}")
                 
                 current_char = st.session_state.characters[st.session_state.current_character_idx]
@@ -432,6 +491,8 @@ def main():
     # Main content
     if not st.session_state.logged_in:
         show_auth()
+    elif st.session_state.stage == 'welcome':
+        show_welcome()
     elif st.session_state.stage == 'passage_choice':
         show_passage_choice()
     elif st.session_state.stage == 'passage':
