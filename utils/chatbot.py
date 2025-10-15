@@ -3,6 +3,9 @@ import os
 import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import ChatPromptTemplate
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class CharacterChatbot:
     def __init__(self):

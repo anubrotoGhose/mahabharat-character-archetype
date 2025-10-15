@@ -2,65 +2,93 @@
 import json
 import os
 import uuid
-import sqlite3
+import streamlit as st
 from datetime import datetime
 from typing import List, Dict, Any
 from contextlib import contextmanager
+import mysql.connector
+from mysql.connector import Error
+import urllib.parse
+from dotenv import load_dotenv
+
 
 class Database:
-    def __init__(self, db_path: str = "database.db"):
-        """Initialize SQLite database"""
-        self.db_path = db_path
+    def __init__(self):
+        """Initialize MySQL database connection"""
+        load_dotenv()
+        try:
+            mysql_url = st.secrets["MYSQL_URL"]
+        except (KeyError, FileNotFoundError):
+            mysql_url = os.getenv("MYSQL_URL")
+        url = urllib.parse.urlparse(mysql_url)
+
+        self.host = url.hostname
+        self.port = url.port
+        self.user = url.username
+        self.password = url.password
+        mysql_db = url.path.lstrip('/') 
+        self.database = mysql_db
+        
+        # Initialize database on creation
         self.init_database()
-    
+
     @contextmanager
     def get_connection(self):
-        """Context manager for database connections"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row  # Enable dict-like row access
+        """Context manager for MySQL database connections"""
+        conn = None
         try:
+            conn = mysql.connector.connect(
+                host=self.host,
+                port=self.port,
+                user=self.user,
+                password=self.password,
+                database=self.database,
+                ssl_disabled=False
+            )
             yield conn
             conn.commit()
-        except Exception as e:
-            conn.rollback()
+        except Error as e:
+            if conn:
+                conn.rollback()
             raise e
         finally:
-            conn.close()
+            if conn and conn.is_connected():
+                conn.close()
     
     def init_database(self):
         """Initialize database tables"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Users table with password
+            # Users table with password - MYSQL SYNTAX
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS p1_mb_users (
-                    id TEXT PRIMARY KEY,
-                    username TEXT NOT NULL UNIQUE,
-                    password TEXT NOT NULL,
+                    id VARCHAR(36) PRIMARY KEY,
+                    username VARCHAR(255) NOT NULL UNIQUE,
+                    password VARCHAR(255) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
-            # Sessions table
+            # Sessions table - MYSQL SYNTAX
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS p1_mb_sessions (
-                    id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
+                    id VARCHAR(36) PRIMARY KEY,
+                    user_id VARCHAR(36) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    completed INTEGER DEFAULT 0,
+                    completed INT DEFAULT 0,
                     FOREIGN KEY (user_id) REFERENCES p1_mb_users(id) ON DELETE CASCADE
                 )
             """)
             
-            # Character responses table
+            # Character responses table - MYSQL SYNTAX
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS p1_mb_character_responses (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id TEXT NOT NULL,
-                    character_id INTEGER NOT NULL,
-                    character_name TEXT NOT NULL,
-                    read_passage INTEGER DEFAULT 0,
+                    id INT PRIMARY KEY AUTO_INCREMENT,
+                    session_id VARCHAR(36) NOT NULL,
+                    character_id INT NOT NULL,
+                    character_name VARCHAR(255) NOT NULL,
+                    read_passage INT DEFAULT 0,
                     responses TEXT NOT NULL,
                     analysis TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -69,20 +97,30 @@ class Database:
             """)
             
             # Create indexes for better query performance
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_p1_mb_sessions_user_id 
-                ON p1_mb_sessions(user_id)
-            """)
+            # MySQL doesn't support IF NOT EXISTS for indexes, so wrap in try-except
+            try:
+                cursor.execute("""
+                    CREATE INDEX idx_p1_mb_sessions_user_id 
+                    ON p1_mb_sessions(user_id)
+                """)
+            except Error:
+                pass  # Index already exists
             
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_p1_mb_character_responses_session_id 
-                ON p1_mb_character_responses(session_id)
-            """)
+            try:
+                cursor.execute("""
+                    CREATE INDEX idx_p1_mb_character_responses_session_id 
+                    ON p1_mb_character_responses(session_id)
+                """)
+            except Error:
+                pass
             
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_p1_mb_users_username 
-                ON p1_mb_users(username)
-            """)
+            try:
+                cursor.execute("""
+                    CREATE INDEX idx_p1_mb_users_username 
+                    ON p1_mb_users(username)
+                """)
+            except Error:
+                pass
             
             conn.commit()
             print("Database Initialized")
@@ -93,7 +131,7 @@ class Database:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO p1_mb_users (id, username, password) VALUES (?, ?, ?)",
+                    "INSERT INTO p1_mb_users (id, username, password) VALUES (%s, %s, %s)",
                     (user_id, username, password)
                 )
                 return {"id": user_id, "username": username}
@@ -105,19 +143,15 @@ class Database:
         """Verify user login credentials"""
         try:
             with self.get_connection() as conn:
-                cursor = conn.cursor()
+                cursor = conn.cursor(dictionary=True)
                 cursor.execute(
-                    "SELECT id, username, created_at FROM p1_mb_users WHERE username = ? AND password = ?",
+                    "SELECT id, username, created_at FROM p1_mb_users WHERE username = %s AND password = %s",
                     (username, password)
                 )
                 row = cursor.fetchone()
                 
                 if row:
-                    return {
-                        "id": row["id"],
-                        "username": row["username"],
-                        "created_at": row["created_at"]
-                    }
+                    return row
                 return None
         except Exception as e:
             print(f"Error verifying login: {e}")
@@ -128,7 +162,7 @@ class Database:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT id FROM p1_mb_users WHERE username = ?", (username,))
+                cursor.execute("SELECT id FROM p1_mb_users WHERE username = %s", (username,))
                 return cursor.fetchone() is not None
         except Exception as e:
             print(f"Error checking username: {e}")
@@ -140,7 +174,7 @@ class Database:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO p1_mb_users (id, username, password) VALUES (?, ?, '')",
+                    "INSERT INTO p1_mb_users (id, username, password) VALUES (%s, %s, '')",
                     (user_id, username)
                 )
                 return {"id": user_id, "username": username}
@@ -154,7 +188,7 @@ class Database:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO p1_mb_sessions (id, user_id, completed) VALUES (?, ?, 0)",
+                    "INSERT INTO p1_mb_sessions (id, user_id, completed) VALUES (%s, %s, 0)",
                     (session_id, user_id)
                 )
                 return {"id": session_id, "user_id": user_id}
@@ -168,13 +202,13 @@ class Database:
         """Save character assessment response"""
         try:
             with self.get_connection() as conn:
-                cursor = conn.cursor()
+                cursor = conn.cursor(dictionary=True)
                 
                 # Insert character response (convert bool to int, JSON to string)
                 cursor.execute("""
                     INSERT INTO p1_mb_character_responses 
                     (session_id, character_id, character_name, read_passage, responses, analysis)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                 """, (
                     session_id, 
                     character_id, 
@@ -186,7 +220,7 @@ class Database:
                 
                 # Update session completed count
                 cursor.execute(
-                    "SELECT completed FROM p1_mb_sessions WHERE id = ?",
+                    "SELECT completed FROM p1_mb_sessions WHERE id = %s",
                     (session_id,)
                 )
                 row = cursor.fetchone()
@@ -194,7 +228,7 @@ class Database:
                 if row:
                     current_completed = row["completed"]
                     cursor.execute(
-                        "UPDATE p1_mb_sessions SET completed = ? WHERE id = ?",
+                        "UPDATE p1_mb_sessions SET completed = %s WHERE id = %s",
                         (current_completed + 1, session_id)
                     )
                 
@@ -207,11 +241,11 @@ class Database:
         """Get all responses for a session"""
         try:
             with self.get_connection() as conn:
-                cursor = conn.cursor()
+                cursor = conn.cursor(dictionary=True)
                 cursor.execute("""
                     SELECT character_id, character_name, read_passage, responses, analysis, created_at
                     FROM p1_mb_character_responses
-                    WHERE session_id = ?
+                    WHERE session_id = %s
                     ORDER BY created_at
                 """, (session_id,))
                 
@@ -235,11 +269,11 @@ class Database:
         """Get all sessions for a user"""
         try:
             with self.get_connection() as conn:
-                cursor = conn.cursor()
+                cursor = conn.cursor(dictionary=True)
                 cursor.execute("""
                     SELECT id, created_at, completed
                     FROM p1_mb_sessions
-                    WHERE user_id = ?
+                    WHERE user_id = %s
                     ORDER BY created_at DESC
                 """, (user_id,))
                 
@@ -260,12 +294,12 @@ class Database:
         """Get session information with user details"""
         try:
             with self.get_connection() as conn:
-                cursor = conn.cursor()
+                cursor = conn.cursor(dictionary=True)
                 cursor.execute("""
                     SELECT s.id, s.user_id, s.created_at, s.completed, u.username
                     FROM p1_mb_sessions s
                     JOIN p1_mb_users u ON s.user_id = u.id
-                    WHERE s.id = ?
+                    WHERE s.id = %s
                 """, (session_id,))
                 
                 row = cursor.fetchone()
@@ -287,19 +321,15 @@ class Database:
         """Get user by username"""
         try:
             with self.get_connection() as conn:
-                cursor = conn.cursor()
+                cursor = conn.cursor(dictionary=True)
                 cursor.execute(
-                    "SELECT id, username, created_at FROM p1_mb_users WHERE username = ?",
+                    "SELECT id, username, created_at FROM p1_mb_users WHERE username = %s",
                     (username,)
                 )
                 row = cursor.fetchone()
                 
                 if row:
-                    return {
-                        "id": row["id"],
-                        "username": row["username"],
-                        "created_at": row["created_at"]
-                    }
+                    return row
                 return None
         except Exception as e:
             print(f"Error getting user by username: {e}")

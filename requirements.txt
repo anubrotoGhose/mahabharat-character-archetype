@@ -8,3 +8,4 @@ python-dotenv
 supabase
 SQLAlchemy
 aiosqlite
+mysql-connector-python
