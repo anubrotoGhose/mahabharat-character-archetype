@@ -9,3 +9,4 @@ supabase
 SQLAlchemy
 aiosqlite
 mysql-connector-python
+extra-streamlit-components

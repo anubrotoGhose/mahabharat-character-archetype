@@ -2,12 +2,55 @@
 import streamlit as st
 import json
 from datetime import datetime
+import time
 import uuid
 from utils.database import Database
 from utils.chatbot import CharacterChatbot
+import extra_streamlit_components as stx
 from dotenv import load_dotenv
 import base64
 load_dotenv()
+
+
+
+def get_cookie_manager():
+    return stx.CookieManager()
+
+if 'cookie_manager' not in st.session_state:
+    st.session_state.cookie_manager = get_cookie_manager()
+
+cookie_manager = st.session_state.cookie_manager
+
+# Function to save login state to cookies
+def save_login_to_cookie(user_id, username):
+    """Save user login information to cookies"""
+    user_data = {
+        'user_id': user_id,
+        'username': username,
+        'logged_in': True
+    }
+    cookie_manager.set('user_session', json.dumps(user_data), max_age=7*24*60*60)  # 7 days
+    time.sleep(1)  # Important: Give time for cookie to be set
+
+def load_login_from_cookie():
+    """Load user login information from cookies"""
+    user_cookie = cookie_manager.get('user_session')
+    if user_cookie:
+        try:
+            user_data = json.loads(user_cookie)
+            if user_data.get('logged_in'):
+                return user_data
+        except:
+            pass
+    return None
+
+def clear_login_cookie():
+    """Clear user session cookie"""
+    try:
+        cookie_manager.delete('user_session')
+        time.sleep(1)
+    except Exception as e:
+        print(f"Error clearing cookie: {e}")
 
 # Page configuration
 st.set_page_config(
@@ -70,20 +113,36 @@ st.markdown("""
 
 # Initialize session state
 if 'initialized' not in st.session_state:
+    
+    st.session_state.db = Database()
+    st.session_state.chatbot = CharacterChatbot()
+    
+    saved_session = load_login_from_cookie()
+    
     st.session_state.initialized = False
     st.session_state.logged_in = False
     st.session_state.auth_mode = 'login'  # 'login' or 'signup'
     st.session_state.user_id = None
+    st.session_state.username = None
+    
+    # Restore from cookie if available
+    if saved_session:
+        st.session_state.logged_in = True
+        st.session_state.user_id = saved_session['user_id']
+        st.session_state.username = saved_session['username']
+        st.session_state.stage = 'welcome'
+    else:
+        st.session_state.stage = 'auth'
+    
     st.session_state.session_id = str(uuid.uuid4())
-    st.session_state.db = Database()
-    st.session_state.chatbot = CharacterChatbot()
+    
     st.session_state.current_character_idx = 0
     st.session_state.current_question_idx = 0
     st.session_state.responses = []
     st.session_state.read_passage = False
     st.session_state.stage = 'auth'  # auth, welcome, passage_choice, passage, questions, analysis
     st.session_state.rating_responses = {}
-    st.session_state.username = None
+    
     st.session_state.characters = st.session_state.chatbot.characters_data
 
 def show_auth():
@@ -166,6 +225,7 @@ def show_login():
         with st.form("login_form"):
             username = st.text_input("👤 Username", placeholder="Enter your username")
             password = st.text_input("🔒 Password", type="password", placeholder="Enter your password")
+            remember_me = st.checkbox("Remember me", value=True)
             
             submitted = st.form_submit_button("Login", use_container_width=True)
             
@@ -173,15 +233,19 @@ def show_login():
                 if not username or not password:
                     st.error("❌ Please enter both username and password")
                 else:
-                    # Verify login
                     user = st.session_state.db.verify_user_login(username, password)
                     
                     if user:
                         st.session_state.logged_in = True
                         st.session_state.username = user['username']
                         st.session_state.user_id = user['id']
-                        st.session_state.stage = 'welcome'  # Changed from 'passage_choice'
+                        st.session_state.stage = 'welcome'
                         st.session_state.initialized = True
+                        
+                        # Save to cookie if remember me is checked
+                        if remember_me:
+                            save_login_to_cookie(user['id'], user['username'])
+                        
                         st.success(f"✅ Welcome back, {username}!")
                         st.rerun()
                     else:
@@ -480,6 +544,7 @@ def main():
             
             st.write("---")
             if st.button("🚪 Logout"):
+                clear_login_cookie()  # Clear the cookie
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
                 st.rerun()
