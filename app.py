@@ -170,6 +170,10 @@ st.markdown("""
         border: none;
         font-weight: bold;
     }
+    
+    [data-testid="stSidebarNav"] {
+        display: none;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -728,7 +732,15 @@ def main():
     with st.sidebar:
         st.image("assets/Mahabharat Krishna Wallpaper Teahub Io.jpg", width=100)
         
-        # Changed: Show Home instead of title
+        # ADD CUSTOM NAVIGATION HERE
+        if st.session_state.logged_in:
+            st.write("### 🧭 Navigation")
+            if st.button("🏠 Main", use_container_width=True, type="secondary" if st.session_state.stage == 'welcome' else "primary"):
+                st.session_state.stage = 'welcome'
+                st.rerun()
+            
+            if st.button("📊 Dashboard", use_container_width=True):
+                st.switch_page("pages/dashboard.py")
         
         st.write("---")
         
@@ -770,6 +782,7 @@ def main():
         show_questions()
     elif st.session_state.stage == 'analysis':
         show_analysis()
+
 
 if __name__ == "__main__":
     main()
