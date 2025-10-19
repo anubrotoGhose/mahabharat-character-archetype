@@ -70,7 +70,7 @@ def generate_completion_certificate(username, session_id, completion_date, total
     pdf.setFont("Helvetica", 10)
     pdf.setFillColor(colors.black)
     pdf.drawString(1.5*inch, 2*inch, f"Date: {completion_date}")
-    pdf.drawString(1.5*inch, 1.7*inch, f"Session ID: {session_id}...")
+    pdf.drawString(1.5*inch, 1.7*inch, f"Session ID: {session_id}")
     
     # Signature line
     pdf.setLineWidth(1)
@@ -138,7 +138,7 @@ def generate_analysis_report(username, session_id, responses, avg_rating, strong
     # User Info
     user_info_data = [
         ['Name:', username],
-        ['Session ID:', session_id[:24] + '...'],
+        ['Session ID:', session_id],
         ['Date:', datetime.now().strftime('%B %d, %Y')],
         ['Characters Assessed:', str(len(responses))],
         ['Average Rating:', f"{avg_rating:.1f}/10"],
