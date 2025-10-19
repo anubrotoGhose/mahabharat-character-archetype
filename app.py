@@ -6,6 +6,8 @@ import time
 import uuid
 from utils.database import Database
 from utils.chatbot import CharacterChatbot
+from utils.pdf_generator import generate_analysis_report
+from utils.pdf_generator import generate_completion_certificate 
 import extra_streamlit_components as stx
 from dotenv import load_dotenv
 import base64
@@ -704,15 +706,66 @@ def show_analysis():
             st.session_state.current_question_idx = 0
             st.session_state.responses = []
             st.session_state.read_passage = False
-            st.session_state.question_flow = []  # Reset question flow
-            st.session_state.current_question_data = None  # Reset current question
-            st.session_state.base_question_idx = 0  # Reset base question index
+            st.session_state.question_flow = []
+            st.session_state.current_question_data = None
+            st.session_state.base_question_idx = 0
             st.session_state.stage = 'passage_choice'
             st.rerun()
     else:
         # All characters completed
         st.success("🎉 Congratulations! You have completed all character assessments!")
         st.info(f"📊 View your complete analysis in the Dashboard")
+        
+        # PDF DOWNLOADS SECTION
+        st.write("---")
+        st.write("## 📥 Download Your Documents")
+        
+        # Get all session responses for PDF generation
+        db = Database()
+        all_responses = db.get_session_responses(st.session_state.session_id)
+        
+        if all_responses:
+            avg_rating = sum([r['analysis']['overall_rating'] for r in all_responses]) / len(all_responses)
+            highest_character = max(all_responses, key=lambda x: x['analysis']['overall_rating'])
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Generate completion certificate                
+                cert_pdf = generate_completion_certificate(
+                    username=st.session_state.username,
+                    session_id=st.session_state.session_id,
+                    completion_date=datetime.now().strftime('%B %d, %Y'),
+                    total_characters=len(all_responses)
+                )
+                
+                st.download_button(
+                    label="📜 Download Completion Certificate",
+                    data=cert_pdf,
+                    file_name=f"Certificate_{st.session_state.username}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            
+            with col2:
+                # Generate analysis report                
+                report_pdf = generate_analysis_report(
+                    username=st.session_state.username,
+                    session_id=st.session_state.session_id,
+                    responses=all_responses,
+                    avg_rating=avg_rating,
+                    strongest_character=highest_character['character_name']
+                )
+                
+                st.download_button(
+                    label="📊 Download Analysis Report",
+                    data=report_pdf,
+                    file_name=f"Analysis_Report_{st.session_state.username}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+        
+        st.write("---")
         
         col1, col2 = st.columns(2)
         

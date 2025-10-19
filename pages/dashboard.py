@@ -3,7 +3,9 @@ import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 from utils.database import Database
-from datetime import datetime   
+from datetime import datetime
+from utils.pdf_generator import generate_analysis_report
+from utils.pdf_generator import generate_completion_certificate   
 from utils.visualization import (
     create_radar_chart, 
     create_bar_chart, 
@@ -14,11 +16,21 @@ from utils.visualization import (
 import base64
 from pathlib import Path
 
+
 st.set_page_config(
     page_title="Assessment Dashboard",
     page_icon="📊",
     layout="wide"
 )
+
+# Hide default Streamlit navigation
+st.markdown("""
+<style>
+    [data-testid="stSidebarNav"] {
+        display: none;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 if 'logged_in' not in st.session_state or not st.session_state.logged_in:
     st.error("🔒 **Access Denied**: You must be logged in to view the dashboard.")
@@ -29,11 +41,13 @@ if 'logged_in' not in st.session_state or not st.session_state.logged_in:
     
     st.stop()  # Stop execution here if not logged in   
 
+
 def datetime_handler(obj):
     """JSON serializer for datetime objects"""
     if isinstance(obj, datetime):
         return obj.isoformat()
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
 
 # Function to encode image to base64
 def get_base64_image(image_path):
@@ -44,8 +58,10 @@ def get_base64_image(image_path):
     except:
         return None
 
+
 # Custom CSS with background image
 bg_image = get_base64_image("assets/images/13422928.jpg")
+
 
 if bg_image:
     st.markdown(f"""
@@ -135,11 +151,13 @@ else:
     </style>
     """, unsafe_allow_html=True)
 
+
 def load_session_data(session_id):
     """Load data for a specific session"""
     db = Database()
     responses = db.get_session_responses(session_id)
     return responses
+
 
 def display_session_list(username):
     """Display list of all sessions for a user by username"""
@@ -230,6 +248,7 @@ def display_session_list(username):
                             st.error("Failed to delete")
     
     return selected_session
+
 
 def display_dashboard(responses, session_info=None):
     """Display complete dashboard for a session"""
@@ -408,12 +427,14 @@ def display_dashboard(responses, session_info=None):
             with st.expander("📋 Your Responses"):
                 st.json(response['responses'])
 
-    
-    # Download report
+    # Download section
     st.write("---")
     st.write("## 📥 Export Your Results")
     
-    col1, col2 = st.columns(2)
+    # Determine if all 6 characters are completed for certificate
+    is_complete = len(responses) >= 6
+    
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         import json
@@ -435,29 +456,108 @@ def display_dashboard(responses, session_info=None):
         )
     
     with col2:
-        if st.button("🏠 Start New Assessment", use_container_width=True):
-            st.switch_page("app.py")
+        # PDF Analysis Report - Always available if there's data
+        
+        # Get session_id from responses or session_state
+        session_id = responses[0].get('session_id', st.session_state.get('session_id', 'unknown'))
+        
+        report_pdf = generate_analysis_report(
+            username=username,
+            session_id=session_id,
+            responses=responses,
+            avg_rating=avg_rating,
+            strongest_character=highest_character['character_name']
+        )
+        
+        st.download_button(
+            label="📊 Download Analysis Report (PDF)",
+            data=report_pdf,
+            file_name=f"Analysis_Report_{username}_{datetime.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+    
+    with col3:
+        # Completion Certificate - Only if all 6 completed
+        if is_complete:
+            
+            # Get completion date from last response
+            completion_date = responses[-1].get('created_at', datetime.now().strftime('%B %d, %Y'))
+            if isinstance(completion_date, str) and '-' in completion_date:
+                # Convert from database format to readable format
+                try:
+                    from datetime import datetime as dt
+                    completion_date = dt.strptime(completion_date.split()[0], '%Y-%m-%d').strftime('%B %d, %Y')
+                except:
+                    completion_date = datetime.now().strftime('%B %d, %Y')
+            
+            cert_pdf = generate_completion_certificate(
+                username=username,
+                session_id=session_id,
+                completion_date=completion_date,
+                total_characters=len(responses)
+            )
+            
+            st.download_button(
+                label="📜 Download Certificate (PDF)",
+                data=cert_pdf,
+                file_name=f"Certificate_{username}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        else:
+            st.info(f"🏆 Complete all 6 characters to unlock your certificate!\n\n({len(responses)}/6 completed)")
+    
+    st.write("---")
+    
+    # Start new assessment button
+    if st.button("🏠 Start New Assessment", use_container_width=True):
+        st.switch_page("app.py")
 
 def main():
-    # Sidebar navigation
+    # Sidebar navigation - SAME AS APP.PY
     with st.sidebar:
-        st.title("🎭 Dashboard")
+        st.image("assets/Mahabharat Krishna Wallpaper Teahub Io.jpg", width=100)
+        
+        # CUSTOM NAVIGATION
+        if st.session_state.logged_in:
+            st.write("### 🧭 Navigation")
+            if st.button("🏠 Main", use_container_width=True):
+                st.switch_page("app.py")
+            
+            if st.button("📊 Dashboard", use_container_width=True, type="primary"):
+                st.rerun()
         
         st.write("---")
         
-        # Show current user
-        if 'username' in st.session_state:
-            st.success(f"👤 Logged in as: **{st.session_state.username}**")
-        
-        view_mode = st.radio(
-            "View Mode:",
-            ["Current Session", "Past Sessions"],
-            help="Switch between current session, history, or search other users"
-        )
+        if st.session_state.logged_in:
+            st.success(f"👤 **{st.session_state.username}**")
+            
+            # Show view mode selector
+            view_mode = st.radio(
+                "📂 View Mode:",
+                ["Current Session", "Past Sessions"],
+                help="Switch between current session and history"
+            )
+            
+            st.session_state.dashboard_view_mode = view_mode
+            
+            st.write("---")
+            
+            # Logout button
+            from app import clear_login_cookie  # Import from app.py
+            if st.button("🚪 Logout", use_container_width=True):
+                clear_login_cookie()
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.switch_page("app.py")
         
         st.write("---")
         st.write("### ℹ️ About")
         st.write("Explore your character assessments and discover insights from the Mahabharata.")
+    
+    # Get view mode from session state (default to "Current Session")
+    view_mode = st.session_state.get('dashboard_view_mode', 'Current Session')
     
     # Main content based on view mode
     if view_mode == "Current Session":
@@ -490,41 +590,7 @@ def main():
             st.write("---")
             responses = load_session_data(selected_session)
             display_dashboard(responses)
-    
-    else:  # Search by Username
-        st.markdown("""
-        <div class="dashboard-header">
-            <h1>🔍 Search User Sessions</h1>
-            <p>View any user's assessment history</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        search_username = st.text_input(
-            "🔎 Enter username to search:",
-            placeholder="Enter exact username",
-            help="Search for any user's assessment history"
-        )
-        
-        if search_username:
-            if st.button("Search", use_container_width=True):
-                st.session_state.search_username = search_username
-            
-            if 'search_username' in st.session_state:
-                db = Database()
-                user = db.get_user_by_username(st.session_state.search_username)
-                
-                if user:
-                    st.success(f"✅ Found user: **{user['username']}** (Joined: {user['created_at']})")
-                    st.write("---")
-                    
-                    selected_session = display_session_list(st.session_state.search_username)
-                    
-                    if selected_session:
-                        st.write("---")
-                        responses = load_session_data(selected_session)
-                        display_dashboard(responses)
-                else:
-                    st.error(f"❌ No user found with username: **{st.session_state.search_username}**")
+
 
 
 if __name__ == "__main__":

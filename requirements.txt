@@ -10,3 +10,5 @@ SQLAlchemy
 aiosqlite
 mysql-connector-python
 extra-streamlit-components
+reportlab
+pillow
