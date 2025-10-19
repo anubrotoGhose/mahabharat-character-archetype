@@ -157,25 +157,33 @@ def display_session_list(username):
     
     for idx, session in enumerate(sessions):
         with st.container():
-            col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+            total_chars = 6  # Total number of characters
+            is_complete = session['completed'] >= total_chars
+            has_data = session['completed'] > 0
+            
+            col1, col2, col3, col4, col5 = st.columns([3, 2, 1, 1, 1])
             
             with col1:
+                # Add completion badge
+                badge = "✅ Complete" if is_complete else "🔄 In Progress" if has_data else "📝 New"
+                badge_color = "#28a745" if is_complete else "#ffc107" if has_data else "#6c757d"
+                
                 st.markdown(f"""
                 <div class="session-card">
-                    <h4>📝 Session #{idx + 1}</h4>
+                    <h4>📝 Session #{idx + 1} <span style="background: {badge_color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px; margin-left: 8px;">{badge}</span></h4>
                     <p style="font-size: 12px; color: #666;">ID: {session['id'][:12]}...</p>
                     <p>📅 {session['created_at']}</p>
                 </div>
                 """, unsafe_allow_html=True)
             
             with col2:
-                total_chars = 6  # Total number of characters
                 st.write(f"**{session['completed']}/{total_chars}** characters completed")
                 completion_pct = (session['completed'] / total_chars) * 100
                 st.progress(min(completion_pct / 100, 1.0))
             
             with col3:
-                if session['completed'] > 0:
+                # View button - only enabled if there's data
+                if has_data:
                     if st.button("👁️ View", key=f"view_{session['id']}", use_container_width=True):
                         selected_session = session['id']
                         st.session_state.selected_session = selected_session
@@ -184,14 +192,42 @@ def display_session_list(username):
                     st.caption("No data")
             
             with col4:
+                # Continue button - only for incomplete sessions
+                if not is_complete:
+                    if st.button("▶️ Continue", key=f"continue_{session['id']}", use_container_width=True, type="primary"):
+                        # Load this session and continue from where they left off
+                        st.session_state.session_id = session['id']
+                        st.session_state.current_character_idx = session['completed']  # Start from next character
+                        st.session_state.current_question_idx = 0
+                        st.session_state.responses = []
+                        st.session_state.read_passage = False
+                        st.session_state.question_flow = []
+                        st.session_state.current_question_data = None
+                        st.session_state.base_question_idx = 0
+                        st.session_state.stage = 'passage_choice'
+                        
+                        # Switch to main app
+                        st.switch_page("app.py")
+                else:
+                    # Show a checkmark for completed sessions
+                    st.markdown("✅", help="Completed")
+            
+            with col5:
                 # Delete button
                 if st.button("🗑️", key=f"delete_{session['id']}", use_container_width=True, help="Delete this session"):
-                    db = Database()
-                    if db.delete_session(session['id']):
-                        st.success("Session deleted!")
+                    # Add confirmation
+                    if f"confirm_delete_{session['id']}" not in st.session_state:
+                        st.session_state[f"confirm_delete_{session['id']}"] = True
+                        st.warning("⚠️ Click delete again to confirm")
                         st.rerun()
                     else:
-                        st.error("Failed to delete")
+                        db = Database()
+                        if db.delete_session(session['id']):
+                            del st.session_state[f"confirm_delete_{session['id']}"]
+                            st.success("Session deleted!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete")
     
     return selected_session
 
