@@ -205,7 +205,7 @@ def display_dashboard(responses, session_info=None):
         username = session_info.get('username', 'User')
     if not username:
         username = 'User'
-    
+            
     st.markdown(f"""
     <div class="dashboard-header">
         <h1>🎭 Character Assessment Dashboard</h1>
@@ -214,6 +214,17 @@ def display_dashboard(responses, session_info=None):
         <p style="font-size: 14px; opacity: 0.9;">✨ "योगः कर्मसु कौशलम्" - Excellence in action is Yoga ✨</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    summary_image = get_base64_image('assets/Final_Summary.jpeg')
+    
+    if summary_image:
+        st.markdown(
+            f'''
+            <div style="text-align: center;">
+                <img src="data:image/jpeg;base64,{summary_image}" alt="Dashboard Summary" style="max-width: 600px; width: 100%; border-radius: 18px; margin: 20px 0; box-shadow: 0 4px 24px rgba(25,0,70,.15);"/>
+            </div>
+            ''', unsafe_allow_html=True
+        )
     
     if not responses:
         st.warning("📝 No assessment data found. Please complete at least one character assessment.")

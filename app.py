@@ -74,6 +74,77 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
+    /* Dark mode detection and variables */
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --background-color: #0e1117;
+            --text-color: #fafafa;
+            --border-color: #262730;
+            --card-background: #262730;
+            --passage-background: #1e2129;
+        }
+    }
+    
+    @media (prefers-color-scheme: light) {
+        :root {
+            --background-color: white;
+            --text-color: #262730;
+            --border-color: #e0e0e0;
+            --card-background: white;
+            --passage-background: #fff3cd;
+        }
+    }
+    
+    /* Apply to existing classes */
+    .passage-box {
+        background: var(--passage-background) !important;
+        border-left: 5px solid #ffc107;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 15px 0;
+    }
+    
+    .passage-box h3 {
+        color: #ffc107 !important;
+    }
+    
+    .passage-box p {
+        color: var(--text-color) !important;
+        text-align: justify;
+        line-height: 1.8;
+    }
+    
+    .analysis-box {
+        background: var(--card-background) !important;
+        border-left: 5px solid #28a745;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 15px 0;
+    }
+    
+    .analysis-box h2, .analysis-box h3 {
+        color: #28a745 !important;
+    }
+    
+    .analysis-box p {
+        color: var(--text-color) !important;
+    }
+    
+    .auth-box {
+        background: var(--card-background) !important;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        max-width: 500px;
+        margin: 0 auto;
+        border: 1px solid var(--border-color);
+    }
+    
+    .auth-box p, .auth-box h3 {
+        color: var(--text-color) !important;
+    }
+    
+    /* Main header stays the same (gradient) */
     .main-header {
         text-align: center;
         padding: 20px;
@@ -82,6 +153,7 @@ st.markdown("""
         border-radius: 10px;
         margin-bottom: 20px;
     }
+    
     .character-title {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
@@ -89,28 +161,7 @@ st.markdown("""
         font-weight: bold;
         font-size: 28px;
     }
-    .passage-box {
-        background: #fff3cd;
-        border-left: 5px solid #ffc107;
-        padding: 20px;
-        border-radius: 10px;
-        margin: 15px 0;
-    }
-    .analysis-box {
-        background: #d4edda;
-        border-left: 5px solid #28a745;
-        padding: 20px;
-        border-radius: 10px;
-        margin: 15px 0;
-    }
-    .auth-box {
-        background: white;
-        padding: 30px;
-        border-radius: 15px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        max-width: 500px;
-        margin: 0 auto;
-    }
+    
     .stButton>button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -319,9 +370,17 @@ def show_welcome():
     
     # Preview text
     st.markdown("""
-    <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin: 20px 0;">
+    <div style="background: var(--background-color, white); 
+                padding: 30px; 
+                border-radius: 15px; 
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+                margin: 20px 0;
+                border: 1px solid var(--border-color, #e0e0e0);">
         <h3 style="color: #667eea; text-align: center;">📖 About This Assessment</h3>
-        <p style="text-align: justify; line-height: 1.8; font-size: 16px;">
+        <p style="text-align: justify; 
+                  line-height: 1.8; 
+                  font-size: 16px;
+                  color: var(--text-color, #262730);">
         Mahabharata, management and you, read by the author Amitrajit Ghosh, HR Professional and Executive Coach. 
         Mahabharata is the ultimate Indian epic which has remarkably portrayed all human traits ranging from desire 
         to sacrifice, jealousy to broad-minded, cruelty to compassion and short-sightedness to visionary. In order 
@@ -329,12 +388,18 @@ def show_welcome():
         a specific trait. And above all there is an ultimate supreme figure in the form of the great Krishna, who 
         symbolizes a Sampoonapurush or the complete man.
         </p>
-        <p style="text-align: justify; line-height: 1.8; font-size: 16px;">
+        <p style="text-align: justify; 
+                  line-height: 1.8; 
+                  font-size: 16px;
+                  color: var(--text-color, #262730);">
         The epic is over 5,000 years old, but even today in every walk of life we can see the story repeating itself 
         with only characters changing. In order to succeed in India, global business corporations and its executives 
         need to understand the history and culture of that nation. This book will give a deep insight into India's culture.
         </p>
-        <p style="text-align: justify; line-height: 1.8; font-size: 16px;">
+        <p style="text-align: justify; 
+                  line-height: 1.8; 
+                  font-size: 16px;
+                  color: var(--text-color, #262730);">
         In the subsequent chapters, let's understand the characters of Arjuna, Duryodhana, Dronacharya, Karna, Draupadi 
         and Krishna better and the learnings thereof, which in turn will help us in our career-building in organizations.
         </p>
@@ -421,7 +486,7 @@ def show_passage():
     with st.container():
         st.markdown(f"""
         <div class="passage-box">
-            <h3>📖 The Story of {current_char['character']}</h3>
+            <h3>📖 About {current_char['character']}</h3>
             <p style="text-align: justify; line-height: 1.8;">{current_char['passage']}</p>
         </div>
         """, unsafe_allow_html=True)
