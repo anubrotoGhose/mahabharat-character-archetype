@@ -20,6 +20,15 @@ st.set_page_config(
     layout="wide"
 )
 
+if 'logged_in' not in st.session_state or not st.session_state.logged_in:
+    st.error("🔒 **Access Denied**: You must be logged in to view the dashboard.")
+    st.info("👉 Please go to the home page and login first.")
+    
+    if st.button("🏠 Go to Login Page", use_container_width=True):
+        st.switch_page("app.py")
+    
+    st.stop()  # Stop execution here if not logged in   
+
 def datetime_handler(obj):
     """JSON serializer for datetime objects"""
     if isinstance(obj, datetime):

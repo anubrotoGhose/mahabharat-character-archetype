@@ -9,8 +9,19 @@ from utils.chatbot import CharacterChatbot
 import extra_streamlit_components as stx
 from dotenv import load_dotenv
 import base64
+from pathlib import Path
 load_dotenv()
 
+# Add this helper function after imports
+def get_character_image(image_path):
+    """Convert character image to base64, return None if not found"""
+    try:
+        if Path(image_path).exists():
+            with open(image_path, "rb") as img_file:
+                return base64.b64encode(img_file.read()).decode()
+    except Exception as e:
+        print(f"Error loading image: {e}")
+    return None
 
 
 def get_cookie_manager():
@@ -144,6 +155,10 @@ if 'initialized' not in st.session_state:
     st.session_state.rating_responses = {}
     
     st.session_state.characters = st.session_state.chatbot.characters_data
+    
+    st.session_state.question_flow = []
+    st.session_state.current_question_data = None
+    st.session_state.base_question_idx = 0
 
 def show_auth():
     """Show login/signup screen"""
@@ -347,11 +362,26 @@ def show_welcome():
             st.switch_page("pages/dashboard.py")
 
 
+# Update show_passage_choice function
 def show_passage_choice():
-    """Ask if user wants to read passage"""
+    """Ask if user wants to read passage with character image"""
     current_char = st.session_state.characters[st.session_state.current_character_idx]
     
-    st.markdown(f'<p class="character-title">Character: {current_char["character"]}</p>', unsafe_allow_html=True)
+    # Try to load character image
+    char_image = get_character_image(current_char.get('image', ''))
+    
+    if char_image:
+        st.markdown(f"""
+        <div style="text-align: center; margin-bottom: 20px;">
+            <img src="data:image/jpeg;base64,{char_image}" 
+                 style="border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 400px; width: 100%;"
+                 alt="{current_char['character']}">
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown(f'<p class="character-title">{current_char["character"]}</p>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<p class="character-title">Character: {current_char["character"]}</p>', unsafe_allow_html=True)
+    
     st.write(f"Would you like to read the passage about **{current_char['character']}**?")
     
     col1, col2 = st.columns(2)
@@ -364,11 +394,27 @@ def show_passage_choice():
         if st.button("⏭️ No, skip to questions", use_container_width=True):
             st.session_state.read_passage = False
             st.session_state.stage = 'questions'
+            # Initialize question flow
+            st.session_state.question_flow = []
+            st.session_state.current_question_data = current_char['questions'][0]
+            st.session_state.base_question_idx = 0
             st.rerun()
 
 def show_passage():
-    """Display character passage"""
+    """Display character passage with image"""
     current_char = st.session_state.characters[st.session_state.current_character_idx]
+    
+    # Try to load character image
+    char_image = get_character_image(current_char.get('image', ''))
+    
+    if char_image:
+        st.markdown(f"""
+        <div style="text-align: center; margin-bottom: 20px;">
+            <img src="data:image/jpeg;base64,{char_image}" 
+                 style="border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 300px; width: 100%;"
+                 alt="{current_char['character']}">
+        </div>
+        """, unsafe_allow_html=True)
     
     st.markdown(f'<p class="character-title">{current_char["character"]}</p>', unsafe_allow_html=True)
     
@@ -382,53 +428,124 @@ def show_passage():
     
     if st.button("Continue to Questions ➡️", use_container_width=True):
         st.session_state.stage = 'questions'
+        # Initialize question flow
+        st.session_state.question_flow = []
+        st.session_state.current_question_data = current_char['questions'][0]
+        st.session_state.base_question_idx = 0
         st.rerun()
-
+        
 def show_questions():
-    """Display questions one by one"""
+    """Display questions with dynamic follow-ups based on LLM"""
     current_char = st.session_state.characters[st.session_state.current_character_idx]
     questions = current_char['questions']
     
-    if st.session_state.current_question_idx >= len(questions):
+    # Initialize question tracking if not exists
+    if 'question_flow' not in st.session_state:
+        st.session_state.question_flow = []
+        st.session_state.current_question_data = questions[0]
+        st.session_state.base_question_idx = 0
+    
+    current_question = st.session_state.current_question_data
+    
+    # Check if we've completed all questions
+    if current_question is None:
         submit_responses()
         return
     
-    question = questions[st.session_state.current_question_idx]
-    
     st.markdown(f'<p class="character-title">{current_char["character"]}</p>', unsafe_allow_html=True)
-    st.progress((st.session_state.current_question_idx + 1) / len(questions))
-    st.write(f"**Question {st.session_state.current_question_idx + 1} of {len(questions)}**")
     
-    st.write(f"### {question['question']}")
+    # Progress based on base questions (not follow-ups)
+    total_base_questions = len(questions)
+    completed_base = st.session_state.base_question_idx
+    st.progress((completed_base + 1) / total_base_questions)
+    st.write(f"**Question {completed_base + 1} of {total_base_questions}**")
     
-    if question.get('rate_question'):
-        st.write("**Rate yourself on the following qualities (1-5):**")
-        st.write("*1 = Lowest, 5 = Highest*")
+    # Show if this is a follow-up question
+    if current_question.get('is_follow_up'):
+        st.info("📌 Follow-up question based on your previous answer")
+    
+    # Show guidance if available
+    if current_question.get('guidance'):
+        with st.expander("💡 Guidance"):
+            st.write(current_question['guidance'])
+    
+    st.write(f"### {current_question['question']}")
+    
+    if current_question.get('rate_question'):
+        st.write("**Rate yourself on the following qualities (0-10):**")
+        st.write("*0 = Lowest, 10 = Highest*")
         
         ratings = {}
-        for i, option in enumerate(question['options']):
+        for i, option in enumerate(current_question['options']):
             rating = st.slider(
                 option,
-                min_value=1,
-                max_value=5,
-                value=3,
-                key=f"rating_{st.session_state.current_question_idx}_{i}"
+                min_value=0,
+                max_value=10,
+                value=5,
+                key=f"rating_{current_question['question_no']}_{i}"
             )
             ratings[option] = rating
         
         if st.button("Submit Ratings ➡️", use_container_width=True):
-            st.session_state.responses.append(ratings)
-            st.session_state.current_question_idx += 1
+            # Store response with question metadata
+            st.session_state.responses.append({
+                'question_no': current_question['question_no'],
+                'question': current_question['question'],
+                'answer': ratings,
+                'type': 'rating'
+            })
+            
+            # Get next question using LLM orchestration
+            next_question = st.session_state.chatbot.get_next_question(
+                current_question,
+                str(ratings),
+                questions,
+                st.session_state.base_question_idx
+            )
+            
+            if next_question:
+                st.session_state.current_question_data = next_question
+                if not next_question.get('is_follow_up'):
+                    st.session_state.base_question_idx += 1
+            else:
+                st.session_state.current_question_data = None
+            
             st.rerun()
     else:
-        with st.form(key=f"question_form_{st.session_state.current_question_idx}"):
-            answer = st.text_area("Your Answer:", height=150, key=f"answer_{st.session_state.current_question_idx}")
+        with st.form(key=f"question_form_{current_question['question_no']}"):
+            answer = st.text_area(
+                "Your Answer:", 
+                height=150, 
+                key=f"answer_{current_question['question_no']}",
+                placeholder="Please provide a detailed answer..."
+            )
             submitted = st.form_submit_button("Submit Answer ➡️", use_container_width=True)
             
             if submitted:
                 if answer.strip():
-                    st.session_state.responses.append(answer)
-                    st.session_state.current_question_idx += 1
+                    # Store response with metadata
+                    st.session_state.responses.append({
+                        'question_no': current_question['question_no'],
+                        'question': current_question['question'],
+                        'answer': answer,
+                        'type': 'text'
+                    })
+                    
+                    # Get next question using LLM orchestration
+                    next_question = st.session_state.chatbot.get_next_question(
+                        current_question,
+                        answer,
+                        questions,
+                        st.session_state.base_question_idx
+                    )
+                    
+                    if next_question:
+                        st.session_state.current_question_data = next_question
+                        if not next_question.get('is_follow_up'):
+                            st.session_state.base_question_idx += 1
+                    else:
+                        st.session_state.current_question_data = None
+                    
                     st.rerun()
                 else:
                     st.warning("Please provide an answer before continuing.")
@@ -464,6 +581,18 @@ def show_analysis():
     current_char = st.session_state.characters[st.session_state.current_character_idx]
     analysis = st.session_state.current_analysis
     
+    # Display character image if available
+    char_image = get_character_image(current_char.get('image', ''))
+    
+    if char_image:
+        st.markdown(f"""
+        <div style="text-align: center; margin-bottom: 20px;">
+            <img src="data:image/jpeg;base64,{char_image}" 
+                 style="border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 250px; width: 100%;"
+                 alt="{current_char['character']}">
+        </div>
+        """, unsafe_allow_html=True)
+    
     st.markdown(f'<p class="character-title">{current_char["character"]} - Assessment Complete!</p>', unsafe_allow_html=True)
     
     st.markdown(f"""
@@ -478,40 +607,54 @@ def show_analysis():
     with col1:
         st.write("### 💪 Strengths")
         for strength in analysis.get('strengths', []):
-            st.write(f"- {strength}")
+            st.write(f"✓ {strength}")
         
         st.write("### 💡 Recommendations")
         for rec in analysis.get('recommendations', []):
-            st.write(f"- {rec}")
+            st.write(f"→ {rec}")
     
     with col2:
         st.write("### 🎯 Areas for Improvement")
         for area in analysis.get('areas_for_improvement', []):
-            st.write(f"- {area}")
+            st.write(f"○ {area}")
         
         st.write("### 🔍 Key Insights")
         for insight in analysis.get('key_insights', []):
-            st.write(f"- {insight}")
+            st.write(f"• {insight}")
     
     with st.expander("📝 Detailed Analysis"):
         st.write(analysis.get('analysis', ''))
     
     st.write("---")
     
+    # Check if there are more characters
     if st.session_state.current_character_idx < len(st.session_state.characters) - 1:
         if st.button("Next Character ➡️", use_container_width=True):
+            # Reset for next character
             st.session_state.current_character_idx += 1
             st.session_state.current_question_idx = 0
             st.session_state.responses = []
             st.session_state.read_passage = False
+            st.session_state.question_flow = []  # Reset question flow
+            st.session_state.current_question_data = None  # Reset current question
+            st.session_state.base_question_idx = 0  # Reset base question index
             st.session_state.stage = 'passage_choice'
             st.rerun()
     else:
+        # All characters completed
         st.success("🎉 Congratulations! You have completed all character assessments!")
-        st.info(f"📊 View your complete analysis in the Dashboard (sidebar)")
+        st.info(f"📊 View your complete analysis in the Dashboard")
         
-        if st.button("View Dashboard 📊", use_container_width=True):
-            st.switch_page("pages/dashboard.py")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("📊 View Dashboard", use_container_width=True, type="primary"):
+                st.switch_page("pages/dashboard.py")
+        
+        with col2:
+            if st.button("🏠 Go Home", use_container_width=True):
+                st.session_state.stage = 'welcome'
+                st.rerun()
 
 def main():
     """Main app logic"""
@@ -521,10 +664,6 @@ def main():
         st.image("assets/Mahabharat Krishna Wallpaper Teahub Io.jpg", width=100)
         
         # Changed: Show Home instead of title
-        if st.button("🏠 Home", use_container_width=True):
-            if st.session_state.logged_in:
-                st.session_state.stage = 'welcome'
-                st.rerun()
         
         st.write("---")
         
