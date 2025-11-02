@@ -8,7 +8,7 @@
       {
         "question_no": 1,
         "rate_question": false,
-        "question": "Think Arjuna, are you clear about your long term career goal?",
+        "question": "Like Arjuna, are you clear about your long term career goal?",
         "follow_up_questions": {
           "yes": {
             "question": "What is your long term career goal?",
